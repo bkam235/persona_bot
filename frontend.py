@@ -1,14 +1,22 @@
 import datetime
 import time
+import sqlite3
 
 import backend
 import gradio as gr
 import os
 from backend_thinking import thinking
 import random
+from langgraph.checkpoint.sqlite import SqliteSaver
 
-b = backend.backend()
-t = backend.backend()
+# Single shared SQLite connection and checkpointer for both backend instances.
+# Both b and t read from the same thread_id="main" checkpoint, so t.call_model()
+# has access to the full conversation history that b is writing.
+_conn = sqlite3.connect("checkpoints.db", check_same_thread=False)
+_checkpointer = SqliteSaver(_conn)
+
+b = backend.backend(_checkpointer)
+t = backend.backend(_checkpointer)
 
 def respond(msg, chat_history):
     if b.thinking==True:
@@ -17,15 +25,15 @@ def respond(msg, chat_history):
     if b.turn_count % 10 == 0:
         b.evolve_character()
         t.reload_character()
-    return "", b.parse_history(b.history)
+    return "", b.parse_history(b.messages)
 
 def handle_clear(history):
-    return(b.parse_history(b.history))
+    return(b.parse_history(b.messages))
 
 def handle_undo(history, undo_data: gr.UndoData):
     undo_msg = history[undo_data.index+1]
     b.undo_backend_history(undo_msg["metadata"]["id"])
-    return(b.parse_history(b.history), history[undo_data.index]["content"])
+    return(b.parse_history(b.messages), history[undo_data.index]["content"])
 
 def handle_thinking():
     thinking(think_backend=t, chat_backend=b)
@@ -40,7 +48,7 @@ def handle_evolve():
     b.evolve_character()
     t.reload_character()
 
-hist = b.parse_history(b.history)
+hist = b.parse_history(b.messages)
 
 with gr.Blocks() as chat:
     chatbot = gr.Chatbot(value=hist, label="Persona bot", autoscroll=True)
@@ -74,4 +82,3 @@ with gr.Blocks() as chat:
             evolve_btn.click(handle_evolve)
 
 chat.queue().launch(server_name="0.0.0.0")
-
