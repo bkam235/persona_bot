@@ -5,9 +5,7 @@ def thinking(think_backend, chat_backend):
     if len(chat_backend.thoughts) >= 3:
         return(None)
 
-    think_backend.character = """
-    [to be filled from character.txt]
-    """
+    think_backend.reload_character()
 
     think_backend.setting = []
     think_backend.setting.append(BaseMessage(type="human",

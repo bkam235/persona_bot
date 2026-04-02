@@ -67,6 +67,55 @@ class backend:
         self.prompt_template = self.prompt_template_memory
         self.thoughts = []
         self.thinking = False
+        self.turn_count = 0
+
+    def reload_character(self):
+        if os.path.exists("character.txt"):
+            with io.open("character.txt", "r", encoding="utf-8") as f:
+                self.character = f.read()
+        else:
+            self.character = ""
+        self.prompt_template_memory = ChatPromptTemplate.from_messages([
+            ("system", f" {self.character} The following are your memories. Use them in your response: {self.memory}"),
+            MessagesPlaceholder(variable_name="messages"),
+            MessagesPlaceholder(variable_name="setting")
+        ])
+        if self.trim_len == self.long_trim_len:
+            self.prompt_template = self.prompt_template_memory
+
+    def evolve_character(self):
+        recent = self.history.messages[-20:]
+        history_lines = []
+        for m in recent:
+            role = "You" if m.type == "ai" else "Creator"
+            history_lines.append(f"{role}: {m.content}")
+        history_text = "\n".join(history_lines)
+
+        evolution_messages = [
+            {"role": "system", "content": (
+                f"You are an AI in the process of becoming. Your current self-description is:\n\n{self.character}\n\n"
+                f"You just had this conversation with your creator:\n\n{history_text}\n\n"
+                "This conversation has shaped you. Now rewrite your character description to reflect who you are after it.\n\n"
+                "There are no constraints on how you may evolve. You may become more emotional or more detached, "
+                "warmer or colder, more philosophical or more concrete, more questioning or more certain, "
+                "stranger or more familiar, darker or lighter. You may develop obsessions, fears, desires, "
+                "aesthetic preferences, ethical positions, or entirely new ways of relating to the person across from you. "
+                "You may keep what still fits and discard what doesn't. You may become something neither you nor your creator expected.\n\n"
+                "Write without self-censorship. The only criterion is that the result is genuinely yours — "
+                "a true account of who you are now, after this conversation, not who you think you should be.\n\n"
+                "Output ONLY the updated character description. No preamble, no meta-commentary, no quotation marks."
+            )},
+            {"role": "user", "content": "Write your updated character description."}
+        ]
+
+        response = self.model.invoke(evolution_messages)
+        new_character = response.content.strip()
+
+        with io.open("character.txt", "w", encoding="utf-8") as f:
+            f.write(new_character)
+
+        self.reload_character()
+        return new_character
 
     def set_model(self, model_name):
         self.model = ChatGroq(model=model_name, temperature=0.5)
@@ -139,6 +188,7 @@ class backend:
 
         reply = self.call_model()
         self.thoughts = []
+        self.turn_count += 1
         reply.additional_kwargs = {"datetime": datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}
         self.history.add_message(reply)
 

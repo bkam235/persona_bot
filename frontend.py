@@ -14,6 +14,9 @@ def respond(msg, chat_history):
     if b.thinking==True:
         thinking(think_backend=t, chat_backend=b)
     b.generate_next_round(msg)
+    if b.turn_count % 10 == 0:
+        b.evolve_character()
+        t.reload_character()
     return "", b.parse_history(b.history)
 
 def handle_clear(history):
@@ -32,6 +35,10 @@ def set_thinking(value:bool):
     b.thinking = value
     print(f"THINK?: {b.thinking}")
     return(None)
+
+def handle_evolve():
+    b.evolve_character()
+    t.reload_character()
 
 hist = b.parse_history(b.history)
 
@@ -62,6 +69,9 @@ with gr.Blocks() as chat:
                                 type="value",
                                 label="")
             model_radio.change(fn=b.set_model, inputs=model_radio)
+
+            evolve_btn = gr.Button("Evolve character", size="sm")
+            evolve_btn.click(handle_evolve)
 
 chat.queue().launch(server_name="0.0.0.0")
 
